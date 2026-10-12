@@ -15,28 +15,29 @@ class Finding:
     how_computed: str = ""
 
 
-def funnel_stages(df) -> list[Finding]:
+def funnel_stages(df, stages: list, noun_pl: str = "MQLs") -> list[Finding]:
+    names = [s["name"] for s in stages]
+    first, last = names[0], names[-1]
     total = len(df)
     won = int(df["won"].sum())
     conv = won / total if total else 0.0
     lost = total - won
     return [Finding(
-        title="Overall funnel: MQL -> Won",
+        title=f"Overall funnel: {first} -> {last}",
         severity="info",
-        summary=(f"{total:,} MQLs entered, {won:,} won "
+        summary=(f"{total:,} {noun_pl} entered, {won:,} reached {last} "
                  f"({conv:.1%} conversion). {lost:,} lost ({1 - conv:.1%})."),
-        evidence={"mqls": total, "won": won,
+        evidence={"entrants": total, "converted": won,
                   "conversion_rate": round(conv, 4), "lost": lost},
-        how_computed=("merged mqls LEFT JOIN closed_deals on mql_id; "
-                      "won = rows with a match; conversion = won / total"),
+        how_computed=(f"one row per {first}; won = reached {last}; "
+                      f"conversion = converted / entrants"),
     )]
 
 
 def biggest_leak(df, stages: list) -> list[Finding]:
-    # With the Olist data the measurable funnel is two stages, but the logic
-    # is written for N stages so the tool stays general.
-    counts = {"MQL": len(df), "Won": int(df["won"].sum())}
+    # Written for N stages; the measurable funnel may be fewer.
     order = [s["name"] for s in stages]
+    counts = {order[0]: len(df), order[-1]: int(df["won"].sum())}
     leaks = []
     for prev, cur in zip(order, order[1:]):
         drop = counts[prev] - counts[cur]
@@ -65,7 +66,7 @@ def _is_unusable(val, unknown_markers) -> bool:
 
 
 def slice_performance(df, dims, min_volume, under_ratio, over_ratio,
-                      unknown_markers) -> list[Finding]:
+                      unknown_markers, noun="MQL") -> list[Finding]:
     overall = df["won"].mean()
     out = []
     for dim in dims:
@@ -81,7 +82,7 @@ def slice_performance(df, dims, min_volume, under_ratio, over_ratio,
                 out.append(Finding(
                     title=f"Underperformer: {dim} = {label}",
                     severity="warning",
-                    summary=(f"{label} converts at {r:.1%} on {n:,} MQLs — "
+                    summary=(f"{label} converts at {r:.1%} on {n:,} {noun} — "
                              f"well below the {overall:.1%} average. Worth "
                              f"investigating before spending more here."),
                     evidence={"dimension": dim, "value": label, "mqls": n,
@@ -95,7 +96,7 @@ def slice_performance(df, dims, min_volume, under_ratio, over_ratio,
                 out.append(Finding(
                     title=f"Outperformer: {dim} = {label}",
                     severity="info",
-                    summary=(f"{label} converts at {r:.1%} on {n:,} MQLs — "
+                    summary=(f"{label} converts at {r:.1%} on {n:,} {noun} — "
                              f"well above the {overall:.1%} average. "
                              f"Candidate for more investment."),
                     evidence={"dimension": dim, "value": label, "mqls": n,
@@ -108,7 +109,8 @@ def slice_performance(df, dims, min_volume, under_ratio, over_ratio,
     return out
 
 
-def best_known_channel(df, dim, min_volume, unknown_markers) -> list[Finding]:
+def best_known_channel(df, dim, min_volume, unknown_markers,
+                       noun="MQL") -> list[Finding]:
     """The highest-converting *attributable* value at volume.
 
     'Unknown' converting well is a tracking problem, not a channel to scale —
@@ -125,8 +127,8 @@ def best_known_channel(df, dim, min_volume, unknown_markers) -> list[Finding]:
     return [Finding(
         title=f"Best {dim} at volume: {val}",
         severity="info",
-        summary=(f"Among attributable {dim} values with {min_volume}+ MQLs, "
-                 f"{val} converts best at {r:.1%} on {int(n):,} MQLs."),
+        summary=(f"Among attributable {dim} values with {min_volume}+ {noun}, "
+                 f"{val} converts best at {r:.1%} on {int(n):,} {noun}."),
         evidence={dim: str(val), "mqls": int(n),
                   "conversion_rate": round(float(r), 4)},
         how_computed=(f"grouped by {dim}, excluded unusable values "
@@ -135,7 +137,8 @@ def best_known_channel(df, dim, min_volume, unknown_markers) -> list[Finding]:
     )]
 
 
-def attribution_gap(df, dim, unknown_markers) -> list[Finding]:
+def attribution_gap(df, dim, unknown_markers,
+                    noun="MQL") -> list[Finding]:
     col = df[dim].fillna("").astype(str).str.strip().str.lower()
     unknown = col.isin([m.lower() for m in unknown_markers]).sum()
     share = unknown / len(df) if len(df) else 0.0
@@ -143,7 +146,7 @@ def attribution_gap(df, dim, unknown_markers) -> list[Finding]:
     return [Finding(
         title="Attribution gap",
         severity=sev,
-        summary=(f"{unknown:,} of {len(df):,} MQLs ({share:.1%}) have no "
+        summary=(f"{unknown:,} of {len(df):,} {noun} ({share:.1%}) have no "
                  f"usable {dim} — every slice built on this dimension is "
                  f"understated by that much."),
         evidence={"dimension": dim, "unknown_count": int(unknown),
@@ -153,23 +156,35 @@ def attribution_gap(df, dim, unknown_markers) -> list[Finding]:
     )]
 
 
-def velocity(df) -> list[Finding]:
-    won = df[df["won"] == 1]
-    if won.empty or won["days_to_close"].isna().all():
+def velocity(df, start_col: str, end_col: str, group_dim: str,
+             entrant_noun: str = "entrant",
+             won_noun: str = "conversion") -> list[Finding]:
+    df = df.copy()
+    df["_days"] = (pd_to_datetime(df[end_col], format="mixed", errors="coerce")
+                   - pd_to_datetime(df[start_col], format="mixed",
+                                     errors="coerce")).dt.days
+    conv = df[(df["won"] == 1) & df["_days"].notna()]
+    if conv.empty:
         return []
-    med = float(won["days_to_close"].median())
-    by_origin = won.groupby("origin")["days_to_close"].median().round(0).to_dict()
+    med = float(conv["_days"].median())
+    by_group = conv.groupby(group_dim)["_days"].median().round(0).to_dict()
     return [Finding(
-        title="Time to close",
+        title="Time to convert",
         severity="info",
-        summary=(f"Median MQL -> won is {med:.0f} days. Slowest and fastest "
-                 f"origins are visible in the evidence — speed differences "
-                 f"are a second dimension of channel quality."),
-        evidence={"median_days_to_close": round(med, 1),
-                  "median_days_by_origin": {str(k): v for k, v in by_origin.items()}},
-        how_computed=("days_to_close = won_date - first_contact_date; "
-                      "median over won deals, then grouped by origin"),
+        summary=(f"Median {entrant_noun} -> {won_noun} is {med:.0f} days. "
+                 f"Per-{group_dim} medians are in the evidence — speed "
+                 f"differences are a second dimension of quality."),
+        evidence={"median_days": round(med, 1),
+                  f"median_days_by_{group_dim}":
+                  {str(k): v for k, v in by_group.items()}},
+        how_computed=(f"days = {end_col} - {start_col}; median over converted, "
+                       f"then grouped by {group_dim}"),
     )]
+
+
+def pd_to_datetime(*a, **k):
+    import pandas as pd
+    return pd.to_datetime(*a, **k)
 
 
 def pd_isna(v):
@@ -181,8 +196,11 @@ def pd_isna(v):
 
 
 def run_audit(df, config: dict) -> list[Finding]:
+    noun = config["stages"][0]["name"]
+    # naive plural is fine for the nouns we use (MQL, Invoice)
+    noun_pl = noun if noun.endswith("s") else noun + "s"
     findings: list[Finding] = []
-    findings += funnel_stages(df)
+    findings += funnel_stages(df, config["stages"], noun_pl)
     findings += biggest_leak(df, config["stages"])
     findings += slice_performance(
         df,
@@ -191,11 +209,22 @@ def run_audit(df, config: dict) -> list[Finding]:
         config["underperform_ratio"],
         config["outperform_ratio"],
         config["unknown_markers"],
+        noun_pl,
     )
-    findings += best_known_channel(df, "origin",
-                                   config["min_volume_for_flag"],
-                                   config["unknown_markers"])
-    findings += attribution_gap(df, "origin", config["unknown_markers"])
-    findings += velocity(df)
+    if config.get("best_dim"):
+        findings += best_known_channel(df, config["best_dim"],
+                                       config["min_volume_for_flag"],
+                                       config["unknown_markers"],
+                                       noun_pl)
+    if config.get("attribution_dim"):
+        findings += attribution_gap(df, config["attribution_dim"],
+                                    config["unknown_markers"],
+                                    noun_pl)
+    if config.get("velocity"):
+        v = config["velocity"]
+        findings += velocity(df, v["start_col"], v["end_col"],
+                             v["group_dim"],
+                             config["stages"][0]["name"].lower(),
+                             config["stages"][-1]["name"].lower())
     order = {"critical": 0, "warning": 1, "info": 2}
     return sorted(findings, key=lambda f: order[f.severity])
