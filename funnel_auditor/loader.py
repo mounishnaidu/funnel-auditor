@@ -25,5 +25,33 @@ def load_olist_funnel(mqls_csv: str, deals_csv: str) -> pd.DataFrame:
     return f.drop(columns=["_merge"])
 
 
+def load_invoice_funnel(csv_path: str, encoding: str = "latin1") -> pd.DataFrame:
+    """One row per invoice; won = invoice was kept (not a cancellation).
+
+    Exact duplicate lines are dropped first (the gatekeeper proves they are
+    byte-identical); the drop count is printed so nothing happens silently.
+    """
+    raw = pd.read_csv(csv_path, dtype=str, encoding=encoding).fillna("")
+    n_dupes = int(raw.duplicated().sum())
+    df = raw.drop_duplicates().reset_index(drop=True)
+    print(f"Dropped {n_dupes:,} exact duplicate lines before the audit.")
+    g = df.groupby("InvoiceNo")
+    out = pd.DataFrame({
+        "invoice_id": g["InvoiceNo"].first().values,
+        "country": g["Country"].agg(
+            lambda s: s.mode().iloc[0] if len(s) else "").values,
+        "invoice_date": g["InvoiceDate"].first().values,
+        "lines": g.size().values,
+    })
+    out["won"] = (~out["invoice_id"].str.startswith("C")).astype(int)
+    return out[["invoice_id", "country", "invoice_date", "lines", "won"]]
+
+
 def load(config: dict) -> pd.DataFrame:
-    return load_olist_funnel(config["mqls_csv"], config["deals_csv"])
+    kind = config.get("loader", "olist")
+    if kind == "olist":
+        return load_olist_funnel(config["mqls_csv"], config["deals_csv"])
+    if kind == "invoice_funnel":
+        return load_invoice_funnel(config["csv_path"],
+                                   config.get("encoding", "latin1"))
+    raise ValueError(f"unknown loader: {kind}")
