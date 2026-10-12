@@ -1,0 +1,49 @@
+{
+  "loader": "status_funnel",
+  "name": "Online courses: enrollment -> completion",
+  "table": {
+    "path": "/home/hatch/workspace/datasets/course/online_course_completion_analytics.csv",
+    "id_col": "enrollment_id",
+    "encoding": "utf-8"
+  },
+  "status_col": "completion_status",
+  "won_values": [
+    "Completed"
+  ],
+  "exclude_values": [
+    "In Progress"
+  ],
+  "stages": [
+    {
+      "name": "Enrollment",
+      "description": "one row per enrollment_id"
+    },
+    {
+      "name": "Completed",
+      "description": "completion_status == Completed"
+    }
+  ],
+  "slice_dims": [
+    "course_category",
+    "platform_name",
+    "course_level",
+    "student_country"
+  ],
+  "min_volume_for_flag": 100,
+  "underperform_ratio": 0.7,
+  "outperform_ratio": 1.3,
+  "unknown_markers": [
+    "unknown",
+    "",
+    "n/a",
+    "na",
+    "none"
+  ],
+  "attribution_dim": "student_country",
+  "best_dim": "platform_name",
+  "velocity": {
+    "start_col": "enrollment_date",
+    "end_col": "completion_date",
+    "group_dim": "platform_name"
+  }
+}
