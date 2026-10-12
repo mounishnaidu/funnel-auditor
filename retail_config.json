@@ -1,0 +1,32 @@
+{
+  "loader": "invoice_funnel",
+  "name": "Online Retail: invoice placed -> kept",
+  "csv_path": "/home/hatch/workspace/datasets/online-retail/OnlineRetail.csv",
+  "encoding": "latin1",
+  "stages": [
+    {
+      "name": "Invoice",
+      "description": "distinct InvoiceNo"
+    },
+    {
+      "name": "Kept",
+      "description": "invoice not starting with C (not a cancellation)"
+    }
+  ],
+  "slice_dims": [
+    "country"
+  ],
+  "min_volume_for_flag": 100,
+  "underperform_ratio": 0.7,
+  "outperform_ratio": 1.3,
+  "unknown_markers": [
+    "unknown",
+    "",
+    "n/a",
+    "na",
+    "none"
+  ],
+  "attribution_dim": "country",
+  "best_dim": "country",
+  "velocity": null
+}
