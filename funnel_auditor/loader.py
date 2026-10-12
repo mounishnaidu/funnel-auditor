@@ -9,49 +9,72 @@ from pathlib import Path
 import pandas as pd
 
 
-def load_olist_funnel(mqls_csv: str, deals_csv: str) -> pd.DataFrame:
-    mqls = pd.read_csv(mqls_csv, parse_dates=["first_contact_date"])
-    deals = pd.read_csv(deals_csv, parse_dates=["won_date"])
+def load_funnel_join(join_cfg: dict) -> pd.DataFrame:
+    """Generic two-table funnel: entrants LEFT JOIN conversions.
 
-    f = mqls.merge(
-        deals[["mql_id", "won_date", "business_segment",
-               "lead_type", "lead_behaviour_profile"]],
-        on="mql_id",
-        how="left",
-        indicator=True,
-    )
-    f["won"] = (f["_merge"] == "both").astype(int)
-    f["days_to_close"] = (f["won_date"] - f["first_contact_date"]).dt.days
-    return f.drop(columns=["_merge"])
+    Config: join.left / join.right each give {path, key, encoding}.
+    won = 1 when the entrant's key matches a row on the right, else 0.
+    All columns from both sides ride along; slices and dates are picked
+    up from the audit config downstream.
 
-
-def load_invoice_funnel(csv_path: str, encoding: str = "latin1") -> pd.DataFrame:
-    """One row per invoice; won = invoice was kept (not a cancellation).
-
-    Exact duplicate lines are dropped first (the gatekeeper proves they are
-    byte-identical); the drop count is printed so nothing happens silently.
+    Loud failure, not silent wrongness: duplicate keys on either side
+    break the one-row-per-entrant contract, so the loader refuses and
+    points at the gatekeeper instead of guessing.
     """
-    raw = pd.read_csv(csv_path, dtype=str, encoding=encoding).fillna("")
-    n_dupes = int(raw.duplicated().sum())
-    df = raw.drop_duplicates().reset_index(drop=True)
-    print(f"Dropped {n_dupes:,} exact duplicate lines before the audit.")
-    g = df.groupby("InvoiceNo")
-    out = pd.DataFrame({
-        "invoice_id": g["InvoiceNo"].first().values,
-        "country": g["Country"].agg(
-            lambda s: s.mode().iloc[0] if len(s) else "").values,
-        "invoice_date": g["InvoiceDate"].first().values,
-        "lines": g.size().values,
-    })
-    out["won"] = (~out["invoice_id"].str.startswith("C")).astype(int)
-    return out[["invoice_id", "country", "invoice_date", "lines", "won"]]
+    def read(spec):
+        return pd.read_csv(spec["path"], dtype=str,
+                           encoding=spec.get("encoding", "utf-8")).fillna("")
+
+    left, right = read(join_cfg["left"]), read(join_cfg["right"])
+    lk, rk = join_cfg["left"]["key"], join_cfg["right"]["key"]
+
+    for name, df, k in (("left", left, lk), ("right", right, rk)):
+        n_dup = int(df[k].duplicated().sum())
+        if n_dup:
+            raise ValueError(
+                f"{name} table has {n_dup:,} duplicate '{k}' values — "
+                f"one-row-per-entrant is broken. Run the gatekeeper first.")
+
+    f = left.merge(right, left_on=lk, right_on=rk, how="left", indicator=True,
+                   suffixes=("", "_right"))
+    f["won"] = (f["_merge"] == "both").astype(int)
+    drop = ["_merge"] + ([rk] if rk != lk else [])
+    return f.drop(columns=drop)
+
+
+def load_status_funnel(cfg: dict) -> pd.DataFrame:
+    """Single table, one row per id_col; won = status_col in won_values.
+
+    Config: table {path, id_col, encoding}, status_col, won_values.
+    The common shape for event logs that already carry their outcome
+    (enrolled/completed, sent/clicked, applied/hired).
+    """
+    t = cfg["table"]
+    df = pd.read_csv(t["path"], dtype=str,
+                     encoding=t.get("encoding", "utf-8")).fillna("")
+    id_col = t["id_col"]
+    n_dup = int(df[id_col].duplicated().sum())
+    if n_dup:
+        raise ValueError(
+            f"{n_dup:,} duplicate '{id_col}' values — one-row-per-entrant "
+            f"is broken. Run the gatekeeper first.")
+    excluded = cfg.get("exclude_values", [])
+    if excluded:
+        n_ex = int(df[cfg["status_col"]].isin(excluded).sum())
+        df = df[~df[cfg["status_col"]].isin(excluded)].reset_index(drop=True)
+        print(f"Excluded {n_ex:,} rows with unresolved status {excluded} "
+              f"(censored, not lost).")
+    df["won"] = df[cfg["status_col"]].isin(cfg["won_values"]).astype(int)
+    return df
 
 
 def load(config: dict) -> pd.DataFrame:
-    kind = config.get("loader", "olist")
-    if kind == "olist":
-        return load_olist_funnel(config["mqls_csv"], config["deals_csv"])
+    kind = config.get("loader", "funnel_join")
+    if kind == "funnel_join":
+        return load_funnel_join(config["join"])
     if kind == "invoice_funnel":
         return load_invoice_funnel(config["csv_path"],
                                    config.get("encoding", "latin1"))
+    if kind == "status_funnel":
+        return load_status_funnel(config)
     raise ValueError(f"unknown loader: {kind}")
