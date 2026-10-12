@@ -27,5 +27,13 @@
     "n/a",
     "na",
     "none"
-  ]
+  ],
+  "loader": "olist",
+  "best_dim": "origin",
+  "attribution_dim": "origin",
+  "velocity": {
+    "start_col": "first_contact_date",
+    "end_col": "won_date",
+    "group_dim": "origin"
+  }
 }
