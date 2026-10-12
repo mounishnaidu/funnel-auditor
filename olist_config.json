@@ -1,7 +1,5 @@
 {
-  "deals_csv": "/home/hatch/workspace/goals/data-skills-learning-from-scratch/files/ecommerce-growth-audit/data/funnel/olist_closed_deals_dataset.csv",
   "min_volume_for_flag": 100,
-  "mqls_csv": "/home/hatch/workspace/goals/data-skills-learning-from-scratch/files/ecommerce-growth-audit/data/funnel/olist_marketing_qualified_leads_dataset.csv",
   "name": "Olist MQL -> Won funnel",
   "outperform_ratio": 1.3,
   "slice_dims": [
@@ -28,12 +26,24 @@
     "na",
     "none"
   ],
-  "loader": "olist",
+  "loader": "funnel_join",
   "best_dim": "origin",
   "attribution_dim": "origin",
   "velocity": {
     "start_col": "first_contact_date",
     "end_col": "won_date",
     "group_dim": "origin"
+  },
+  "join": {
+    "left": {
+      "path": "/home/hatch/workspace/goals/data-skills-learning-from-scratch/files/ecommerce-growth-audit/data/funnel/olist_marketing_qualified_leads_dataset.csv",
+      "key": "mql_id",
+      "encoding": "utf-8"
+    },
+    "right": {
+      "path": "/home/hatch/workspace/goals/data-skills-learning-from-scratch/files/ecommerce-growth-audit/data/funnel/olist_closed_deals_dataset.csv",
+      "key": "mql_id",
+      "encoding": "utf-8"
+    }
   }
 }
