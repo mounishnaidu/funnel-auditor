@@ -1,6 +1,6 @@
 # Funnel Auditor
 
-A verification-first agent for marketing funnels. Point it at a funnel dataset and it maps stage-to-stage conversion, quantifies leaks, flags underperforming channels and attribution gaps — with every finding backed by its evidence and the exact computation behind it.
+A verification-first agent for marketing funnels. A funnel is the steps people go through from first contact to final action — for example, seeing an ad, signing up, then buying. This tool maps how many people make it through each step, where they drop off, and which channels perform best — with every finding backed by its evidence and the exact computation behind it.
 
 Built by **Mounish Naidu** with **Shadow**.
 
@@ -11,7 +11,7 @@ Built by **Mounish Naidu** with **Shadow**.
 - **Stage conversion** — entry, conversion, and leak at every stage of the funnel
 - **Leak quantification** — the biggest absolute leak, named, not just the worst rate
 - **Channel and segment benchmarks** — best and worst performers at volume, with underperformer flags
-- **Attribution-gap flag** — how much of the funnel has no usable origin, so every slice built on it is honestly understated
+- **Attribution-gap flag** — how many people arrived without us knowing where they came from, so every breakdown built on that data is honestly understated
 - **Velocity** — median time from entry to conversion, overall and per segment
 - **Every finding shows its work** — evidence plus a plain-English description of the exact computation (`--show-work` prints both)
 - **Actions cost an approval** — writing the report requires an explicit yes. Deny by default; undo is always one file deletion
@@ -50,9 +50,9 @@ No code changes. A new funnel is a new config file — that is the point, and it
 Then set in the config:
 
 - `stages` — ordered stage names
-- `slice_dims` — dimensions to benchmark (channel, segment, campaign, …)
+- `slice_dims` — ways to break the numbers down (by channel, by segment, by campaign, …)
 - `unknown_markers` — values that mean "untracked" for your data
-- `min_volume_for_flag`, `underperform_ratio`, `outperform_ratio` — flag sensitivity
+- `min_volume_for_flag`, `underperform_ratio`, `outperform_ratio` — the minimum volume and thresholds that decide when something gets flagged
 - `attribution_dim`, `best_dim`, `velocity` — optional, all config-driven
 
 ## Proven on three datasets, three funnel shapes
@@ -82,16 +82,16 @@ reports/            # generated audit reports land here
 
 ## Technologies used — and why
 
-- **Python** — readable, runs anywhere, no server to deploy. An agent that needs infrastructure before it runs is an agent that doesn't get used.
-- **pandas** — the funnel math is groupby, merge, and date arithmetic, which is exactly what pandas is for. Slices are groupbys; joins are merges; velocity is date subtraction. No custom engine needed.
-- **JSON configs** — a new funnel is a new config, not new code. This is what makes the three-dataset proof possible: the loader, stages, slices, and thresholds all live in the config.
-- **Markdown reports** — timestamped, append-only, human-readable, and diffable. A report you can't read without a dashboard is a report nobody verifies.
-- **CLI, no web server** — the auditor is a tool, not a service. It runs on any machine, on any dataset, with no deployment step.
+- **Python** — the programming language the tool is written in. It runs on any computer, with no server to set up. An agent that needs infrastructure before it runs is an agent that doesn't get used.
+- **pandas** — a Python tool for working with tables of data. The funnel math is counting rows, grouping them (for example, by channel), linking two tables together, and subtracting dates. That's exactly what pandas is built for, so no custom engine was needed.
+- **JSON configs** — plain-text settings files you can edit in any text editor. A new funnel means a new settings file, not new code. That's what makes the three-dataset proof possible: the data source, stages, breakdowns, and thresholds all live in the settings file.
+- **Markdown reports** — simple text files, dated, never overwritten. You can read them anywhere, no special software needed. A report you can't read without a dashboard is a report nobody verifies.
+- **Command-line tool, no web server** — you run it by typing a command. No website to deploy, no account to create. It runs on any machine, on any dataset.
 
 ## The idea
 
 Most marketing agents act first and explain later. This one is built the other way around:
 
 - **Findings are read-only.** The audit engine never writes, sends, or mutates anything.
-- **Unknown is a tracking problem, not a channel.** Unusable origin values are excluded from investment advice and owned by the attribution-gap finding — never presented as an "opportunity."
-- **Structural missingness is not a finding.** Columns blank by construction (deal-side fields for lost deals) are excluded from slice flags, not reported as underperformance.
+- **Unknown is a tracking problem, not a channel.** When we don't know where someone came from, that's a gap in tracking — not a marketing channel to invest in. Those cases are counted in the attribution gap, never presented as an "opportunity."
+- **Empty doesn't always mean broken.** Some columns are empty on purpose — a lost deal has no closing date because it never closed. The auditor doesn't treat that as underperformance.
