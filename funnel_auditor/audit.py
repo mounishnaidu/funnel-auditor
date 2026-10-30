@@ -15,14 +15,28 @@ class Finding:
     how_computed: str = ""
 
 
+def _stage_counts(df, stages: list) -> list:
+    """How many entrants reached at least each stage.
+
+    stage_idx is the furthest stage reached, so reaching stage i means
+    stage_idx >= i. Counts never rise along the funnel; if they do, the
+    loader broke its contract.
+    """
+    if "stage_idx" not in df.columns:
+        df = df.copy()
+        df["stage_idx"] = df["won"] * (len(stages) - 1)
+    counts = [int((df["stage_idx"] >= i).sum()) for i in range(len(stages))]
+    return counts
+
+
 def funnel_stages(df, stages: list, noun_pl: str = "MQLs") -> list[Finding]:
     names = [s["name"] for s in stages]
     first, last = names[0], names[-1]
-    total = len(df)
-    won = int(df["won"].sum())
+    counts = _stage_counts(df, stages)
+    total, won = counts[0], counts[-1]
     conv = won / total if total else 0.0
     lost = total - won
-    return [Finding(
+    out = [Finding(
         title=f"Overall funnel: {first} -> {last}",
         severity="info",
         summary=(f"{total:,} {noun_pl} entered, {won:,} reached {last} "
@@ -32,17 +46,33 @@ def funnel_stages(df, stages: list, noun_pl: str = "MQLs") -> list[Finding]:
         how_computed=(f"one row per {first}; won = reached {last}; "
                       f"conversion = converted / entrants"),
     )]
+    for i in range(len(names) - 1):
+        entered, converted = counts[i], counts[i + 1]
+        rate = converted / entered if entered else 0.0
+        out.append(Finding(
+            title=f"Stage conversion: {names[i]} -> {names[i + 1]}",
+            severity="info",
+            summary=(f"{entered:,} reached {names[i]}, {converted:,} moved "
+                     f"to {names[i + 1]} ({rate:.1%} conversion, "
+                     f"{entered - converted:,} lost)."),
+            evidence={"from_stage": names[i], "to_stage": names[i + 1],
+                      "entered": entered, "converted": converted,
+                      "conversion_rate": round(rate, 4),
+                      "lost": entered - converted},
+            how_computed=(f"stage counts {counts}; conversion = "
+                          f"reached(next) / reached(prev)"),
+        ))
+    return out
 
 
 def biggest_leak(df, stages: list) -> list[Finding]:
-    # Written for N stages; the measurable funnel may be fewer.
-    order = [s["name"] for s in stages]
-    counts = {order[0]: len(df), order[-1]: int(df["won"].sum())}
+    names = [s["name"] for s in stages]
+    counts = _stage_counts(df, stages)
     leaks = []
-    for prev, cur in zip(order, order[1:]):
-        drop = counts[prev] - counts[cur]
-        rate = drop / counts[prev] if counts[prev] else 0.0
-        leaks.append((prev, cur, drop, rate))
+    for i in range(len(names) - 1):
+        drop = counts[i] - counts[i + 1]
+        rate = drop / counts[i] if counts[i] else 0.0
+        leaks.append((names[i], names[i + 1], drop, rate))
     if not leaks:
         return []
     prev, cur, drop, rate = max(leaks, key=lambda x: x[2])
