@@ -1,0 +1,44 @@
+{
+  "attribution_dim": "channel",
+  "best_dim": "channel",
+  "loader": "status_funnel",
+  "min_volume_for_flag": 100,
+  "name": "Human-fixed demo: Lead -> Paid",
+  "outperform_ratio": 1.3,
+  "slice_dims": [
+    "channel"
+  ],
+  "stage_col": "stage",
+  "stages": [
+    {
+      "name": "Lead"
+    },
+    {
+      "name": "Signed up"
+    },
+    {
+      "name": "Activated"
+    },
+    {
+      "name": "Paid"
+    }
+  ],
+  "table": {
+    "encoding": "utf-8",
+    "id_col": "user_id",
+    "path": "/home/hatch/workspace/funnel-auditor/demo_multistage/fixed_multistage.csv"
+  },
+  "underperform_ratio": 0.7,
+  "unknown_markers": [
+    "unknown",
+    "",
+    "n/a",
+    "na",
+    "none"
+  ],
+  "velocity": {
+    "end_col": "paid_date",
+    "group_dim": "channel",
+    "start_col": "signup_date"
+  }
+}
