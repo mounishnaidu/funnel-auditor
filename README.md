@@ -6,6 +6,18 @@ Built by **Mounish Naidu** with **Shadow**.
 
 > Pairs with the [Data Gatekeeper](https://github.com/mounishnaidu/data-gatekeeper): the gatekeeper cleans and validates the data first, the auditor analyzes what comes out. The gatekeeper's `auditor_config.json` points here at cleaned data.
 
+## The problem it solves
+
+A business spends money bringing people in — ads, content, outreach — but most of those people never become customers. The team can see the total numbers, but can't answer the questions that matter: where exactly are people dropping off? Which channel is actually bringing customers, and which one just looks busy? How much of the data can't even be traced back to a source? Without those answers, budget keeps flowing to channels that don't work, and the real leaks never get fixed — because nobody can point to them.
+
+## How it helps a business
+
+- **Fix the right leak.** It names the exact step where the most customers are lost, so effort goes to the real problem instead of guesses.
+- **Spend where it works.** It ranks channels by actual conversion at real volume, so budget moves from what looks good to what performs.
+- **Know how much to trust the data.** It measures how much of the funnel can't be traced to a source, so decisions carry an honest confidence level.
+- **Decide faster, with proof.** A full funnel audit runs in minutes and every finding shows its evidence — so a recommendation can be defended in a meeting, not just believed.
+- **Stop repeating the work.** The audit is reproducible: same data, same settings, same answer — no more rebuilding the same spreadsheet every month.
+
 ## Features
 
 - **Stage conversion** — entry, conversion, and leak at every stage of the funnel
