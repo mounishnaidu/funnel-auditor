@@ -20,7 +20,7 @@ A business spends money bringing people in — ads, content, outreach — but mo
 
 ## Features
 
-- **Stage conversion** — entry, conversion, and leak at every stage of the funnel
+- **Per-stage conversion** — conversion and loss at every step of the funnel, not just entry-to-final. A four-step funnel reports all three transitions plus the overall rate.
 - **Leak quantification** — the biggest absolute leak, named, not just the worst rate
 - **Channel and segment benchmarks** — best and worst performers at volume, with underperformer flags
 - **Attribution-gap flag** — how many people arrived without us knowing where they came from, so every breakdown built on that data is honestly understated
@@ -55,8 +55,8 @@ No code changes. A new funnel is a new config file — that is the point, and it
 
 | Loader | Funnel shape | Config needs |
 |---|---|---|
-| `funnel_join` | Two tables: entrants joined to conversions on any key | left/right table paths and key names |
-| `status_funnel` | One table with a status column (enrolled/completed, sent/clicked) | table path, id column, status column, winning values; `exclude_values` drops censored rows (e.g. "In Progress") instead of counting them as lost |
+| `funnel_join` | Two tables: entrants joined to conversions on any key — or a list of tables, one per stage, for true multi-stage funnels | left/right table paths and key names, or a `stages` list of table paths and keys |
+| `status_funnel` | One table with a status column (enrolled/completed, sent/clicked) — or a stage column holding the stage each row reached, for multi-stage funnels | table path, id column, status column, winning values; `exclude_values` drops censored rows (e.g. "In Progress") instead of counting them as lost; `stage_col` names the column holding stage names |
 | `invoice_funnel` | One table where conversion is "not cancelled" (invoice kept, order fulfilled) | table path, encoding |
 
 Then set in the config:
@@ -74,6 +74,7 @@ Config only, zero code changes each time:
 - **Olist marketing funnel** (two-table join): 8,000 MQLs → 842 won = **10.5%**; paid_search best at **12.3%** on 1,586 MQLs; attribution gap **14.5%**; median **14 days** to close.
 - **Online Retail invoices** (invoice-kept): 25,900 invoices → 22,064 kept = **85.2%**; Netherlands best country at **94.1%**; Germany lowest at 75.8% (a watch item, not flagged).
 - **Online course enrollments** (status funnel): 22,018 resolved enrollments → 12,329 completed = **56.0%**; Advanced courses underperform at **36.3%**; Pinnacle Courses best platform at **65.2%**; median **19 days** to completion.
+- **Multi-stage demo** (four stages, seeded with a known answer key): Lead → Signed up **60.0%**, Signed up → Activated **50.0%**, Activated → Paid **40.0%**, overall **12.0%** — every transition reproduced exactly. The verification script (`verify_multistage.py`) checks this demo plus all three datasets above, and fails loudly on any mismatch.
 
 These reproduce known truth on data the agent had never seen — that is the test it has to pass before it ships.
 
@@ -89,6 +90,10 @@ cli.py              # entry point
 olist_config.json   # two-table join funnel (Olist demo data)
 retail_config.json  # invoice-kept funnel (Online Retail demo data)
 course_config.json  # status funnel (course enrollment demo data)
+multistage_config.json  # four-stage funnel (seeded demo data)
+make_multistage.py  # generate the seeded multi-stage demo + answer key
+verify_multistage.py  # verify demo transitions + all regressions, fails loudly
+demo_multistage/    # seeded demo CSV + manifest.json (answer key)
 reports/            # generated audit reports land here
 ```
 
